@@ -27,6 +27,6 @@
     "typescript-eslint": "7.14.1"
   },
   "dependencies": {
-    "golive-github-actions": "file:../golive-github-actions/golive-github-actions-1.0.0.tgz"
+    "@apwide/golive-github-actions": "1.0.0"
   }
 }

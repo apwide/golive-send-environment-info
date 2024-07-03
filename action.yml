@@ -1,4 +1,4 @@
-name: 'Golive Send Environment Info'
+name: 'golive-send-environment-info'
 description: 'Send Environment Information to Golive'
 inputs:
   goliveToken:

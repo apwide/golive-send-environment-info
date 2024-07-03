@@ -1,3 +1,3 @@
-import { sendEnvironmentInfo } from 'golive-github-actions'
+import { sendEnvironmentInfo } from '@apwide/golive-github-actions'
 
 sendEnvironmentInfo()
