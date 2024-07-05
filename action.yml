@@ -1,5 +1,8 @@
 name: 'golive-send-environment-info'
 description: 'Send Environment Information to Golive'
+branding:
+  icon: server
+  color: purple
 inputs:
   goliveToken:
     required: false

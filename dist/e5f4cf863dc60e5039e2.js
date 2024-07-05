@@ -30946,36 +30946,25 @@ var __webpack_exports__ = {};
 
 // EXPORTS
 __nccwpck_require__.d(__webpack_exports__, {
-  "A": () => (/* reexport */ sendEnvironmentInfo)
+  "A": () => (/* reexport */ sendEnvironmentInfo),
+  "e": () => (/* reexport */ sendReleaseInfo)
 });
 
 // EXTERNAL MODULE: ./node_modules/@actions/core/lib/core.js
 var core = __nccwpck_require__(2186);
-;// CONCATENATED MODULE: ./src/input.ts
+;// CONCATENATED MODULE: ./src/core/utils.ts
 
-function parseAttributes(attributes) {
-    try {
-        return attributes ? JSON.parse(attributes) : undefined;
-    }
-    catch (e) {
-        throw new Error('Could not parse attributes: ' + e);
-    }
+const PUNCT = '!:;<=>?,@#%&*+_\\-./^|~{}[\\]\'"';
+const SEPARATOR = '[\\s' + PUNCT + ']';
+const KEY_PREFIX_REGEX = '(?:(?<=' + SEPARATOR + ')|^)';
+const KEY_BODY_REGEX = '([A-Z][A-Z\\d_]{1,255}-\\d{1,100})';
+const KEY_POSTFIX_REGEX = '(?:(?=' + SEPARATOR + ')|$)';
+const ISSUE_KEY_REGEX = KEY_PREFIX_REGEX + KEY_BODY_REGEX + KEY_POSTFIX_REGEX;
+function extractIssueKeys(text) {
+    return text.match(new RegExp(ISSUE_KEY_REGEX, 'g')) || [];
 }
-function parseIssueKeys(issueKeys) {
-    if (!issueKeys) {
-        return undefined;
-    }
-    return issueKeys.replace(/\s/g, '').split(',');
-}
-function parseNumber(input) {
-    if (input) {
-        const value = parseInt(input);
-        if (Number.isNaN(value)) {
-            throw new Error(`cannot parse number value ${input}`);
-        }
-        return value;
-    }
-    return undefined;
+function unique(values) {
+    return Array.from(new Set(values));
 }
 function fixDate(date) {
     const matches = (date || '').match(/(\d{2})\/(\d{2})\/(\d{4})\s{1}(\d{2}):(\d{2}):(\d{2})/);
@@ -30991,180 +30980,50 @@ function fixDate(date) {
     return `${y}-${M}-${d}T${H}:${m}:${s}Z`;
 }
 function getNumber(key) {
-    return parseNumber((0,core.getInput)(key));
+    const input = (0,core.getInput)(key);
+    if (input) {
+        const value = parseInt(input);
+        if (Number.isNaN(value)) {
+            throw new Error(`cannot parse number value ${input}`);
+        }
+        return value;
+    }
+    return undefined;
 }
 function getBoolean(key, defaultValue) {
     const input = (0,core.getInput)(key);
     return input ? input.toLocaleLowerCase().trim() === 'true' : defaultValue;
 }
 function getAttributes(key) {
-    return parseAttributes((0,core.getInput)(key));
+    const attributes = (0,core.getInput)(key);
+    try {
+        return attributes ? JSON.parse(attributes) : undefined;
+    }
+    catch (e) {
+        throw new Error('Could not parse attributes: ' + e);
+    }
 }
 function getString(key, mandatory = false) {
     const value = (0,core.getInput)(key, { trimWhitespace: true, required: mandatory });
-    return Boolean(value.length) ? value : undefined;
+    return value.length ? value : undefined;
 }
-function parseInput() {
-    return {
-        goliveToken: getString('goliveToken'),
-        goliveUrl: getString('goliveUrl'),
-        goliveUsername: getString('goliveUsername'),
-        golivePassword: getString('golivePassword'),
-        githubToken: getString('githubToken', true),
-        targetEnvironmentId: getNumber('targetEnvironmentId'),
-        targetEnvironmentName: getString('targetEnvironmentName'),
-        targetEnvironmentAutoCreate: getBoolean('targetEnvironmentAutoCreate'),
-        targetCategoryName: getString('targetCategoryName'),
-        targetCategoryId: getNumber('targetCategoryId'),
-        targetCategoryAutoCreate: getBoolean('targetCategoryAutoCreate'),
-        targetApplicationId: getNumber('targetApplicationId'),
-        targetApplicationName: getString('targetApplicationName'),
-        targetApplicationAutoCreate: getBoolean('targetApplicationAutoCreate'),
-        environmentStatusId: getNumber('environmentStatusId'),
-        environmentStatusName: getString('environmentStatusName'),
-        environmentUrl: getString('environmentUrl'),
-        environmentAttributes: getAttributes('environmentAttributes'),
-        deploymentVersionName: getString('deploymentVersionName'),
-        deploymentDeployedDate: getString('deploymentDeployedDate'),
-        deploymentBuildNumber: getString('deploymentBuildNumber'),
-        deploymentDescription: getString('deploymentDescription'),
-        deploymentIssueKeys: parseIssueKeys(getString('deploymentIssueKeys')),
-        deploymentIssueKeysFromCommitHistory: getBoolean('deploymentIssueKeysFromCommitHistory', false),
-        deploymentIssuesFromJql: getString('deploymentIssuesFromJql'),
-        deploymentAttributes: getAttributes('deploymentAttributes'),
-        deploymentSendJiraNotification: getBoolean('deploymentSendJiraNotification', false),
-        deploymentAddDoneIssuesOfJiraVersion: getBoolean('deploymentAddDoneIssuesOfJiraVersion', false),
-        deploymentNoFixVersionUpdate: getBoolean('deploymentNoFixVersionUpdate', false)
-    };
-}
-
-// EXTERNAL MODULE: ./node_modules/@actions/github/lib/github.js
-var github = __nccwpck_require__(5438);
-;// CONCATENATED MODULE: ./src/GithubClient.ts
-
-
-function getCurrentBranch() {
-    return github.context.ref.replaceAll('/refs/heads/', '');
-}
-const MAX_RUNS_PER_PAGE = 100;
-class GithubClient {
-    octokit;
-    constructor(input) {
-        this.octokit = (0,github.getOctokit)(input.githubToken);
+function getIssueKeys(key) {
+    const issueKeys = getString(key);
+    if (!issueKeys) {
+        return undefined;
     }
-    get client() {
-        return this.octokit.rest;
+    return issueKeys.replace(/\s/g, '').split(',');
+}
+function s(o) {
+    if (!o) {
+        return 'n/a';
     }
-    async getAllRunsSinceLastSuccess() {
-        const branch = getCurrentBranch();
-        const scope = [];
-        let page = 1;
-        let foundBoundary = false;
-        let lastLoadedItems = MAX_RUNS_PER_PAGE;
-        let itemsTotal = MAX_RUNS_PER_PAGE + 1;
-        (0,core.debug)(`loading current run detail for run id ${github.context.runId}`);
-        const currentRun = await this.client.actions.getWorkflowRun({
-            ...github.context.repo,
-            run_id: github.context.runId
-        });
-        const params = {
-            branch,
-            ...github.context.repo,
-            workflow_id: currentRun.data.workflow_id
-        };
-        (0,core.debug)(`load last runs since last successful for params: ${JSON.stringify(params)}`);
-        while (!foundBoundary && lastLoadedItems === MAX_RUNS_PER_PAGE && page * MAX_RUNS_PER_PAGE < itemsTotal) {
-            const runs = await this.client.actions.listWorkflowRuns({
-                ...params,
-                page,
-                per_page: MAX_RUNS_PER_PAGE
-            });
-            page++;
-            lastLoadedItems = runs.data.workflow_runs.length;
-            itemsTotal = runs.data.total_count;
-            for (const run of runs.data.workflow_runs) {
-                if (run.conclusion !== 'success') {
-                    scope.push({
-                        id: run.id,
-                        title: run.display_title,
-                        commitId: run.head_commit?.id,
-                        commitMessage: run.head_commit?.message,
-                    });
-                }
-                else {
-                    foundBoundary = true;
-                    break;
-                }
-            }
-        }
-        return scope;
-    }
-}
-
-;// CONCATENATED MODULE: ./src/utils.ts
-const PUNCT = '!:;<=>?,@#%&*+_\\-./^|~{}[\\]\'"';
-const SEPARATOR = '[\\s' + PUNCT + ']';
-const KEY_PREFIX_REGEX = '(?:(?<=' + SEPARATOR + ')|^)';
-const KEY_BODY_REGEX = '([A-Z][A-Z\\d_]{1,255}-\\d{1,100})';
-const KEY_POSTFIX_REGEX = '(?:(?=' + SEPARATOR + ')|$)';
-const ISSUE_KEY_REGEX = KEY_PREFIX_REGEX + KEY_BODY_REGEX + KEY_POSTFIX_REGEX;
-function extractIssueKeys(text) {
-    return text.match(new RegExp(ISSUE_KEY_REGEX, 'g')) || [];
-}
-function unique(values) {
-    return Array.from(new Set(values));
-}
-
-;// CONCATENATED MODULE: external "node:child_process"
-const external_node_child_process_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:child_process");
-;// CONCATENATED MODULE: ./src/scope.ts
-
-
-
-
-function extractIssueKeysFromCli(runs) {
-    const fromCommitId = github.context.sha;
-    const oldestRun = runs.length > 0 ? runs[runs.length - 1] : null;
-    const toCommitId = oldestRun?.commitId || fromCommitId;
-    const issueKeys = fromCli(fromCommitId, toCommitId);
-    (0,core.debug)(`found issues '${issueKeys}' with CLI in commits ${fromCommitId}..${toCommitId}`);
-    return issueKeys;
-}
-function fromCli(fromCommitId, toCommitId) {
     try {
-        (0,core.info)('Extract commits from git CLI');
-        let issueKeys = [];
-        if (fromCommitId == toCommitId) {
-            (0,core.debug)('fromCommit equals toCommit, use different strategy');
-            const commitCount = Number((0,external_node_child_process_namespaceObject.execSync)('git rev-list HEAD --count').toString());
-            if (commitCount == 1) {
-                (0,core.debug)('Only 1 commits, search for entire git log');
-                const logs = (0,external_node_child_process_namespaceObject.execSync)(`git log --format="%s %b"`).toString();
-                issueKeys = extractIssueKeys(logs);
-            }
-            else {
-                (0,core.debug)(`Search in git log with HEAD~1..HEAD`);
-                const logs = (0,external_node_child_process_namespaceObject.execSync)(`git log "HEAD~1..HEAD" --format="%s %b"`).toString();
-                issueKeys = extractIssueKeys(logs);
-            }
-        }
-        else {
-            const logs = (0,external_node_child_process_namespaceObject.execSync)(`git log "${fromCommitId}..HEAD" --format="%s %b"`).toString();
-            issueKeys = extractIssueKeys(logs);
-        }
-        (0,core.info)(`Issue keys found in commits from CLI: ${issueKeys}`);
-        return issueKeys;
+        return JSON.stringify(o);
     }
-    catch (error) {
-        (0,core.info)('Not able to parse git log (are you in shallow checkout ?)');
-        (0,core.debug)(`Error when parsing git repository was: ${error}`);
-        return [];
+    catch (e) {
+        return `${o}`;
     }
-}
-function extractIssueKeysFromRuns(runs) {
-    const issueKeys = extractIssueKeys(runs.map(run => `${run.title} ${run.commitMessage}`).join(' '));
-    (0,core.debug)(`found issues '${issueKeys}' in runs detail`);
-    return issueKeys;
 }
 
 ;// CONCATENATED MODULE: ./src/client/core/ApiError.ts
@@ -32876,7 +32735,7 @@ const request = (config, options) => {
 
 class ApplicationService {
     static postApplication(data) {
-        return __request(OpenAPI, {
+        return request(OpenAPI_OpenAPI, {
             method: 'POST',
             url: '/application',
             body: data.requestBody,
@@ -32887,7 +32746,7 @@ class ApplicationService {
         });
     }
     static getApplicationById(data) {
-        return __request(OpenAPI, {
+        return request(OpenAPI_OpenAPI, {
             method: 'GET',
             url: '/application/{id}',
             path: {
@@ -32899,7 +32758,7 @@ class ApplicationService {
         });
     }
     static putApplicationById(data) {
-        return __request(OpenAPI, {
+        return request(OpenAPI_OpenAPI, {
             method: 'PUT',
             url: '/application/{id}',
             path: {
@@ -32914,7 +32773,7 @@ class ApplicationService {
         });
     }
     static deleteApplicationById(data) {
-        return __request(OpenAPI, {
+        return request(OpenAPI_OpenAPI, {
             method: 'DELETE',
             url: '/application/{id}',
             path: {
@@ -32926,7 +32785,7 @@ class ApplicationService {
         });
     }
     static getApplications(data = {}) {
-        return __request(OpenAPI, {
+        return request(OpenAPI_OpenAPI, {
             method: 'GET',
             url: '/applications',
             query: {
@@ -33136,7 +32995,7 @@ class DeploymentService {
 }
 class VersionService {
     static postVersion(data) {
-        return __request(OpenAPI, {
+        return request(OpenAPI_OpenAPI, {
             method: 'POST',
             url: '/version',
             body: data.requestBody,
@@ -33439,9 +33298,18 @@ var DefaultBoolean;
 
 
 
-;// CONCATENATED MODULE: ./src/GoliveClient.ts
+;// CONCATENATED MODULE: ./src/core/GoliveClient.ts
 
 
+
+function goliveConfig() {
+    return {
+        goliveToken: getString('goliveToken'),
+        goliveUrl: getString('goliveUrl'),
+        goliveUsername: getString('goliveUsername'),
+        golivePassword: getString('golivePassword')
+    };
+}
 function setupGolive({ goliveUrl, goliveToken, goliveUsername, golivePassword }) {
     OpenAPI_OpenAPI.BASE = goliveUrl || 'https://golive.apwide.net/api';
     if (goliveToken?.trim().length || 0 > 0) {
@@ -33452,15 +33320,8 @@ function setupGolive({ goliveUrl, goliveToken, goliveUsername, golivePassword })
         OpenAPI_OpenAPI.PASSWORD = golivePassword;
     }
 }
-function marshal(body) {
-    try {
-        return JSON.stringify(body);
-    }
-    catch (e) {
-        return `${body}`;
-    }
-}
-function removeUndefined(payload) {
+function removeUndefined(obj) {
+    const payload = obj;
     Object.keys(payload).forEach((key) => {
         payload[key] === undefined && delete payload[key];
         if (typeof payload[key] === 'object') {
@@ -33469,57 +33330,230 @@ function removeUndefined(payload) {
     });
     return payload;
 }
-class GoliveClient {
-    constructor(input) {
-        setupGolive(input);
+async function handleError(f) {
+    try {
+        return await f();
     }
-    async sendEnvironmentInfo(info) {
-        const requestBody = removeUndefined(info);
-        (0,core.debug)(`sending environment info: ${JSON.stringify(requestBody)}`);
-        try {
-            return await EnvironmentService.postEnvironmentInformation({ requestBody });
-        }
-        catch (e) {
-            if (e instanceof ApiError) {
-                (0,core.error)(`
-        Error on sending environment information:
+    catch (e) {
+        if (e instanceof ApiError) {
+            (0,core.error)(`
+        Golive error:
         - url: ${e.url}
-        - request body: ${marshal(requestBody)}}
+        - request body: ${s(e.request?.body)}
         - message: ${e.message}
         - status: ${e.status}
         - statusText: ${e.statusText}
-        - response body: ${marshal(e.body)}
+        - response body: ${s(e.body)}
         `);
-            }
-            else {
-                (0,core.error)('non-ApiError thrown');
-            }
-            throw e;
         }
+        else {
+            (0,core.error)('non-ApiError thrown');
+        }
+        throw e;
+    }
+}
+class GoliveClient {
+    constructor(config) {
+        setupGolive(config);
+    }
+    async sendEnvironmentInfo(info) {
+        (0,core.debug)('sending environment info');
+        return handleError(() => EnvironmentService.postEnvironmentInformation({
+            requestBody: removeUndefined(info)
+        }));
+    }
+    async sendReleaseInfo(info) {
+        (0,core.debug)('sending release info');
+        return handleError(() => VersionService.postVersion({
+            requestBody: removeUndefined(info)
+        }));
+    }
+    async getApplicationByName(appName) {
+        const apps = await ApplicationService.getApplications();
+        return apps.find((app) => app.name === appName);
+    }
+    async createApplication(name) {
+        return ApplicationService.postApplication({ requestBody: { name } });
     }
 }
 
-;// CONCATENATED MODULE: ./src/sendEnvironmentInfo.ts
+// EXTERNAL MODULE: ./node_modules/@actions/github/lib/github.js
+var github = __nccwpck_require__(5438);
+;// CONCATENATED MODULE: ./src/core/GithubClient.ts
+
+
+
+function githubConfig() {
+    return {
+        githubToken: getString('githubToken', true)
+    };
+}
+function getCurrentBranch() {
+    return github.context.ref.replaceAll('/refs/heads/', '');
+}
+const MAX_RUNS_PER_PAGE = 100;
+class GithubClient {
+    octokit;
+    constructor({ githubToken }) {
+        this.octokit = (0,github.getOctokit)(githubToken);
+    }
+    get client() {
+        return this.octokit.rest;
+    }
+    async getAllRunsSinceLastSuccess() {
+        const branch = getCurrentBranch();
+        const scope = [];
+        let page = 1;
+        let foundBoundary = false;
+        let lastLoadedItems = MAX_RUNS_PER_PAGE;
+        let itemsTotal = MAX_RUNS_PER_PAGE + 1;
+        (0,core.debug)(`loading current run detail for run id ${github.context.runId}`);
+        const currentRun = await this.client.actions.getWorkflowRun({
+            ...github.context.repo,
+            run_id: github.context.runId
+        });
+        const params = {
+            branch,
+            ...github.context.repo,
+            workflow_id: currentRun.data.workflow_id
+        };
+        (0,core.debug)(`load last runs since last successful for params: ${JSON.stringify(params)}`);
+        while (!foundBoundary && lastLoadedItems === MAX_RUNS_PER_PAGE && page * MAX_RUNS_PER_PAGE < itemsTotal) {
+            const runs = await this.client.actions.listWorkflowRuns({
+                ...params,
+                page,
+                per_page: MAX_RUNS_PER_PAGE
+            });
+            page++;
+            lastLoadedItems = runs.data.workflow_runs.length;
+            itemsTotal = runs.data.total_count;
+            for (const run of runs.data.workflow_runs) {
+                if (run.conclusion !== 'success') {
+                    scope.push({
+                        id: run.id,
+                        title: run.display_title,
+                        commitId: run.head_commit?.id,
+                        commitMessage: run.head_commit?.message
+                    });
+                }
+                else {
+                    foundBoundary = true;
+                    break;
+                }
+            }
+        }
+        return scope;
+    }
+}
+
+;// CONCATENATED MODULE: ./src/sendEnvironmentInfo/input.ts
+
+
+
+function parseInput() {
+    return {
+        ...goliveConfig(),
+        ...githubConfig(),
+        targetEnvironmentId: getNumber('targetEnvironmentId'),
+        targetEnvironmentName: getString('targetEnvironmentName'),
+        targetEnvironmentAutoCreate: getBoolean('targetEnvironmentAutoCreate'),
+        targetCategoryName: getString('targetCategoryName'),
+        targetCategoryId: getNumber('targetCategoryId'),
+        targetCategoryAutoCreate: getBoolean('targetCategoryAutoCreate'),
+        targetApplicationId: getNumber('targetApplicationId'),
+        targetApplicationName: getString('targetApplicationName'),
+        targetApplicationAutoCreate: getBoolean('targetApplicationAutoCreate'),
+        environmentStatusId: getNumber('environmentStatusId'),
+        environmentStatusName: getString('environmentStatusName'),
+        environmentUrl: getString('environmentUrl'),
+        environmentAttributes: getAttributes('environmentAttributes'),
+        deploymentVersionName: getString('deploymentVersionName'),
+        deploymentDeployedDate: getString('deploymentDeployedDate'),
+        deploymentBuildNumber: getString('deploymentBuildNumber'),
+        deploymentDescription: getString('deploymentDescription'),
+        deploymentIssueKeys: getIssueKeys('deploymentIssueKeys'),
+        deploymentIssueKeysFromCommitHistory: getBoolean('deploymentIssueKeysFromCommitHistory', false),
+        deploymentIssuesFromJql: getString('deploymentIssuesFromJql'),
+        deploymentAttributes: getAttributes('deploymentAttributes'),
+        deploymentSendJiraNotification: getBoolean('deploymentSendJiraNotification', false),
+        deploymentAddDoneIssuesOfJiraVersion: getBoolean('deploymentAddDoneIssuesOfJiraVersion', false),
+        deploymentNoFixVersionUpdate: getBoolean('deploymentNoFixVersionUpdate', false)
+    };
+}
+
+;// CONCATENATED MODULE: external "node:child_process"
+const external_node_child_process_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:child_process");
+;// CONCATENATED MODULE: ./src/core/scope.ts
 
 
 
 
 
-
-async function findIssueKeys(input) {
+async function findIssueKeys({ githubToken }) {
     (0,core.debug)('looking for issue keys');
-    const githubClient = new GithubClient(input);
+    const githubClient = new GithubClient({ githubToken });
     const runs = await githubClient.getAllRunsSinceLastSuccess();
     (0,core.debug)(`found ${runs.length} runs to process`);
-    return unique([
-        ...extractIssueKeysFromCli(runs),
-        ...extractIssueKeysFromRuns(runs)
-    ]);
+    return unique([...extractIssueKeysFromCli(runs), ...extractIssueKeysFromRuns(runs)]);
 }
+function extractIssueKeysFromCli(runs) {
+    const fromCommitId = github.context.sha;
+    const oldestRun = runs.length > 0 ? runs[runs.length - 1] : null;
+    const toCommitId = oldestRun?.commitId || fromCommitId;
+    const issueKeys = fromCli(fromCommitId, toCommitId);
+    (0,core.debug)(`found issues '${issueKeys}' with CLI in commits ${fromCommitId}..${toCommitId}`);
+    return issueKeys;
+}
+function fromCli(fromCommitId, toCommitId) {
+    try {
+        (0,core.info)('Extract commits from git CLI');
+        let issueKeys = [];
+        if (fromCommitId == toCommitId) {
+            (0,core.debug)('fromCommit equals toCommit, use different strategy');
+            const commitCount = Number((0,external_node_child_process_namespaceObject.execSync)('git rev-list HEAD --count').toString());
+            if (commitCount == 1) {
+                (0,core.debug)('Only 1 commits, search for entire git log');
+                const logs = (0,external_node_child_process_namespaceObject.execSync)(`git log --format="%s %b"`).toString();
+                issueKeys = extractIssueKeys(logs);
+            }
+            else {
+                (0,core.debug)(`Search in git log with HEAD~1..HEAD`);
+                const logs = (0,external_node_child_process_namespaceObject.execSync)(`git log "HEAD~1..HEAD" --format="%s %b"`).toString();
+                issueKeys = extractIssueKeys(logs);
+            }
+        }
+        else {
+            const logs = (0,external_node_child_process_namespaceObject.execSync)(`git log "${fromCommitId}..HEAD" --format="%s %b"`).toString();
+            issueKeys = extractIssueKeys(logs);
+        }
+        (0,core.info)(`Issue keys found in commits from CLI: ${issueKeys}`);
+        return issueKeys;
+    }
+    catch (error) {
+        (0,core.info)('Not able to parse git log (are you in shallow checkout ?)');
+        (0,core.debug)(`Error when parsing git repository was: ${error}`);
+        return [];
+    }
+}
+function extractIssueKeysFromRuns(runs) {
+    const issueKeys = extractIssueKeys(runs.map((run) => `${run.title} ${run.commitMessage}`).join(' '));
+    (0,core.debug)(`found issues '${issueKeys}' in runs detail`);
+    return issueKeys;
+}
+
+;// CONCATENATED MODULE: ./src/sendEnvironmentInfo/index.ts
+
+
+
+
 async function toDeployment(input) {
     const issueKeys = await findIssueKeys(input);
     (0,core.info)(`found issues '${issueKeys}'`);
-    if (!input.deploymentVersionName && !input.deploymentAttributes && !input.deploymentBuildNumber && !input.deploymentDescription && !issueKeys.length) {
+    if (!input.deploymentVersionName &&
+        !input.deploymentAttributes &&
+        !input.deploymentBuildNumber &&
+        !input.deploymentDescription &&
+        !issueKeys.length) {
         return undefined;
     }
     return {
@@ -33585,12 +33619,111 @@ async function sendEnvironmentInfo() {
             status,
             deployment
         });
-        (0,core.setOutput)('status', 'Success');
+        (0,core.setOutput)('status', 'success');
     }
     catch (error) {
         if (error instanceof Error) {
             (0,core.setFailed)(error.message);
         }
+        (0,core.setOutput)('status', 'failed');
+    }
+}
+
+;// CONCATENATED MODULE: ./src/sendReleaseInfo/input.ts
+
+
+
+
+function sendReleaseInfoInput() {
+    const inputs = {
+        ...goliveConfig(),
+        ...githubConfig(),
+        targetAutoCreate: getBoolean('targetAutoCreate'),
+        targetApplicationId: getNumber('targetApplicationId'),
+        targetApplicationName: getString('targetApplicationName'),
+        versionName: getString('versionName'),
+        versionDescription: getString('versionDescription'),
+        versionStartDate: getString('versionStartDate'),
+        versionReleaseDate: getString('versionReleaseDate'),
+        versionReleased: getBoolean('versionReleased'),
+        issueKeys: getIssueKeys('issueKeys'),
+        issueKeysFromCommitHistory: getBoolean('issueKeysFromCommitHistory', false),
+        issuesFromJql: getString('issuesFromJql'),
+        sendJiraNotification: getBoolean('sendJiraNotification')
+    };
+    if (!inputs.targetApplicationId && !inputs.targetApplicationName) {
+        throw new Error('At least one of applicationId/applicationName must be provided');
+    }
+    (0,core.debug)(`inputs are: ${JSON.stringify(inputs)}`);
+    return inputs;
+}
+
+;// CONCATENATED MODULE: ./src/sendReleaseInfo/index.ts
+
+
+
+
+
+async function getTargetApplicationId(golive, { targetApplicationId, targetApplicationName, targetAutoCreate }) {
+    if (targetApplicationId) {
+        return targetApplicationId;
+    }
+    if (!targetApplicationName?.length) {
+        throw new Error('Not able to identify application because none of targetApplicationId/targetApplicationName have been provided');
+    }
+    let application = await golive.getApplicationByName(targetApplicationName);
+    (0,core.info)(`Found application ${s(application)}`);
+    if (application) {
+        return application.id;
+    }
+    if (!targetAutoCreate) {
+        throw new Error(`no application id provided, not able to find application for name ${targetApplicationName} and targetAutoCreate set to false`);
+    }
+    (0,core.info)(`Create application with name ${targetApplicationName}`);
+    application = await golive.createApplication(targetApplicationName);
+    (0,core.info)(`Application created with id ${application.id}`);
+    return application.id;
+}
+async function loadIssueKeys(inputs) {
+    let issueKeys = [];
+    if (inputs.issueKeys) {
+        (0,core.info)('loading issue keys from input');
+        issueKeys = [...issueKeys, ...inputs.issueKeys];
+    }
+    if (inputs.issueKeysFromCommitHistory) {
+        issueKeys = [...issueKeys, ...(await findIssueKeys(inputs))];
+    }
+    const found = unique(issueKeys);
+    (0,core.info)(`found issue keys ${found}`);
+    return found;
+}
+async function sendReleaseInfo() {
+    try {
+        const input = sendReleaseInfoInput();
+        const golive = new GoliveClient(input);
+        const applicationId = await getTargetApplicationId(golive, input);
+        await golive.sendReleaseInfo({
+            application: {
+                id: applicationId
+            },
+            versionDescription: input.versionDescription,
+            versionName: input.versionName,
+            startDate: input.versionStartDate,
+            releaseDate: input.versionReleaseDate,
+            released: input.versionReleased,
+            issues: {
+                issueKeys: await loadIssueKeys(input),
+                jql: input.issuesFromJql,
+                sendJiraNotification: input.sendJiraNotification
+            }
+        });
+        (0,core.setOutput)('status', 'success');
+    }
+    catch (error) {
+        if (error instanceof Error) {
+            (0,core.setFailed)(error.message);
+        }
+        (0,core.setOutput)('status', 'failed');
     }
 }
 
@@ -33598,7 +33731,9 @@ async function sendEnvironmentInfo() {
 
 
 
+
 })();
 
 var __webpack_exports__sendEnvironmentInfo = __webpack_exports__.A;
-export { __webpack_exports__sendEnvironmentInfo as sendEnvironmentInfo };
+var __webpack_exports__sendReleaseInfo = __webpack_exports__.e;
+export { __webpack_exports__sendEnvironmentInfo as sendEnvironmentInfo, __webpack_exports__sendReleaseInfo as sendReleaseInfo };

@@ -4,7 +4,7 @@ import { createRequire as __WEBPACK_EXTERNAL_createRequire } from "module";
 /***/ 666:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-module.exports = __nccwpck_require__.p + "5c760b24ab1dd7372c90.js";
+module.exports = __nccwpck_require__.p + "e5f4cf863dc60e5039e2.js";
 
 /***/ })
 
@@ -33719,6 +33719,7 @@ async function sendEnvironmentInfo() {
         if (error instanceof Error) {
             (0,core.setFailed)(error.message);
         }
+        (0,core.setOutput)('status', 'failed');
     }
 }
 
@@ -33816,6 +33817,7 @@ async function sendReleaseInfo() {
         if (error instanceof Error) {
             (0,core.setFailed)(error.message);
         }
+        (0,core.setOutput)('status', 'failed');
     }
 }
 
