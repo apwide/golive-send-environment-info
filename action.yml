@@ -6,9 +6,9 @@ branding:
 inputs:
   goliveToken:
     required: false
-    description: 'Golive API Token'
+    description: 'Golive API Token (Golive Cloud)'
   goliveUrl:
-    description: 'Api Base Url'
+    description: 'Api Base Url (Golive Server)'
     required: false
     default: 'https://golive.apwide.net/api'
   goliveUsername:
