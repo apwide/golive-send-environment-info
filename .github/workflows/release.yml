@@ -32,7 +32,7 @@ jobs:
         run: npm ci && npm run build
       - name: Capture action version
         run: |
-          ACTION_VERSION="$(npm show @apwide/golive-github-actions version)"
+          ACTION_VERSION="$(npm pkg get dependencies.@apwide/golive-github-actions)"
           echo "ACTION_VERSION=$ACTION_VERSION" >> "$GITHUB_ENV"
       - name: Set GIT User
         run: |
