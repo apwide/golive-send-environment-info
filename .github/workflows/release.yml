@@ -46,7 +46,7 @@ jobs:
         run: |
           npm version --git-tag-version=false ${{env.ACTION_VERSION}} --silent
           git add -A
-          git commit -m "chore(release): bumped version to v${{env.ACTION_VERSION}}"
+          git commit -m "chore(release): bumped version to v${{env.ACTION_VERSION}} [skip ci]"
           git push origin
         continue-on-error: true
       - name: Push/update tags
