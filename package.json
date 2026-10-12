@@ -28,5 +28,8 @@
   },
   "dependencies": {
     "@apwide/golive-github-actions": "2.8.0"
+  },
+  "overrides": {
+    "undici": "6.28.1"
   }
 }
